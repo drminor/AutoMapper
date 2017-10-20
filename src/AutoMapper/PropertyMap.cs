@@ -11,7 +11,7 @@ namespace AutoMapper
     using static Expression;
 
     [DebuggerDisplay("{DestinationProperty.Name}")]
-    public class PropertyMap
+    public class PropertyMap : IPropertyMap
     {
         private readonly List<MemberInfo> _memberChain = new List<MemberInfo>();
         private readonly List<ValueTransformerConfiguration> _valueTransformerConfigs = new List<ValueTransformerConfiguration>();
@@ -93,6 +93,11 @@ namespace AutoMapper
             }
         }
 
+        //public Expression GetSourceTypeExp()
+        //{
+        //    return Constant(SourceType, typeof(Type));
+        //}
+
         public string CustomSourceMemberName { get; set; }
 
         public void ChainMembers(IEnumerable<MemberInfo> members)
@@ -146,5 +151,24 @@ namespace AutoMapper
                 return base.VisitMember(node);
             }
         }
+
+        public MemberInfo ExtraSourceMember
+        {
+            get
+            {
+                return this.TypeMap.ExtraSourceMembers.FirstOrDefault(s => s.Name == SourceMember.Name);
+                //return TypeMap.SourceTypeDetails.GetExtraFieldOrPropertyFromConfig(SourceMember.Name);
+            }
+        }
+
+        public MemberInfo ExtraDestinationMember 
+        {
+            get
+            {
+                return this.TypeMap.ExtraDestinationMembers.FirstOrDefault(s => s.Name == DestinationProperty.Name);
+                //return TypeMap.DestinationTypeDetails.GetExtraFieldOrPropertyFromConfig(DestinationProperty.Name);
+            }
+        }
+        
     }
 }

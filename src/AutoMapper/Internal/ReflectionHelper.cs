@@ -9,9 +9,26 @@ using System.Reflection;
 namespace AutoMapper.Internal
 {
     using Configuration;
+    using System.Threading;
 
     public static class ReflectionHelper
-    {
+    { 
+        //static Lazy<MethodInfo> _getMemberValueMethod;
+        //static Lazy<MethodInfo> _setMemberValueMethod;
+
+        static Lazy<MethodInfo> _getPropertyValueMethod;
+        static Lazy<MethodInfo> _setPropertyValueMethod;
+
+        static ReflectionHelper()
+        {
+            //_getMemberValueMethod = new Lazy<MethodInfo>(() => GetTheMemberValueMethod(), LazyThreadSafetyMode.PublicationOnly);
+            //_setMemberValueMethod = new Lazy<MethodInfo>(() => GetTheSetMemberValueMethod(), LazyThreadSafetyMode.PublicationOnly);
+
+            _getPropertyValueMethod = new Lazy<MethodInfo>(() => GetThePropertyValueMethod(), LazyThreadSafetyMode.PublicationOnly);
+            _setPropertyValueMethod = new Lazy<MethodInfo>(() => GetTheSetPropertyValueMethod(), LazyThreadSafetyMode.PublicationOnly);
+
+        }
+
         public static bool CanBeSet(MemberInfo propertyOrField)
         {
             return propertyOrField is FieldInfo field ? 
@@ -63,6 +80,10 @@ namespace AutoMapper.Internal
         private static ArgumentOutOfRangeException Expected(MemberInfo propertyOrField)
             => new ArgumentOutOfRangeException(nameof(propertyOrField), "Expected a property or field, not " + propertyOrField);
 
+        private static ArgumentOutOfRangeException ExpectedProperty(MemberInfo propertyOrField)
+            => new ArgumentOutOfRangeException(nameof(propertyOrField), "Expected a property, not " + propertyOrField);
+
+
         public static object GetMemberValue(MemberInfo propertyOrField, object target)
         {
             if (propertyOrField is PropertyInfo property)
@@ -74,6 +95,25 @@ namespace AutoMapper.Internal
                 return field.GetValue(target);
             }
             throw Expected(propertyOrField);
+        }
+
+        public static object GetPropertyValue(MemberInfo propertyOrField, object target, object[] index)
+        {
+            if (propertyOrField is PropertyInfo property)
+            {
+                return property.GetValue(target, index);
+            }
+            throw ExpectedProperty(propertyOrField);
+        }
+
+        public static void SetPropertyValue(MemberInfo propertyOrField, object target, object value, object[] index)
+        {
+            if (propertyOrField is PropertyInfo property)
+            {
+                property.SetValue(target, value, index);
+                return;
+            }
+            throw ExpectedProperty(propertyOrField);
         }
 
         public static IEnumerable<MemberInfo> GetMemberPath(Type type, string fullMemberName)
@@ -185,6 +225,79 @@ namespace AutoMapper.Internal
             }
 
             return targetType;
+        }
+
+        //public static MethodInfo GetMemberValueMethod
+        //{
+        //    get
+        //    {
+        //        return _getMemberValueMethod.Value;
+        //    }
+        //}
+
+        //public static MethodInfo SetMemberValueMethod
+        //{
+        //    get
+        //    {
+        //        return _setMemberValueMethod.Value;
+        //    }
+        //}
+
+        public static MethodInfo GetPropertyValueMethod
+        {
+            get
+            {
+                return _getPropertyValueMethod.Value;
+            }
+        }
+
+        public static MethodInfo SetPropertyValueMethod
+        {
+            get
+            {
+                return _setPropertyValueMethod.Value;
+            }
+        }
+
+        private static MethodInfo GetTheMemberValueMethod()
+        {
+#if !NET40 && !NET45
+            return typeof(AutoMapper.Internal.ReflectionHelper).GetDeclaredMethod("GetMemberValue");
+#else
+            return typeof(AutoMapper.Internal.ReflectionHelper).GetMethod("GetMemberValue", BindingFlags.Static | BindingFlags.Public);
+#endif
+        }
+
+        private static MethodInfo GetTheSetMemberValueMethod()
+        {
+#if !NET40 && !NET45
+            return typeof(AutoMapper.Internal.ReflectionHelper).GetDeclaredMethod("SetMemberValue");
+#else
+            return typeof(AutoMapper.Internal.ReflectionHelper).GetMethod("SetMemberValue", BindingFlags.Static | BindingFlags.Public);
+#endif
+        }
+
+        private static MethodInfo GetThePropertyValueMethod()
+        {
+#if !NET40 && !NET45
+            return typeof(AutoMapper.Internal.ReflectionHelper).GetDeclaredMethod("GetPropertyValue");
+#else
+            return typeof(AutoMapper.Internal.ReflectionHelper).GetMethod("GetPropertyValue", BindingFlags.Static | BindingFlags.Public);
+#endif
+        }
+
+        private static MethodInfo GetTheSetPropertyValueMethod()
+        {
+#if !NET40 && !NET45
+            return typeof(AutoMapper.Internal.ReflectionHelper).GetDeclaredMethod("SetPropertyValue");
+#else
+            return typeof(AutoMapper.Internal.ReflectionHelper).GetMethod("SetPropertyValue", BindingFlags.Static | BindingFlags.Public);
+#endif
+        }
+
+        public static bool IsFieldOrProperty(MemberInfo memberInfo)
+        {
+            return memberInfo is PropertyInfo || memberInfo is FieldInfo;
         }
     }
 }

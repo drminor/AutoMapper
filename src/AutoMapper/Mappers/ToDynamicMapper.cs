@@ -47,12 +47,18 @@ namespace AutoMapper.Mappers
 
         private static readonly MethodInfo MapMethodInfo = typeof(ToDynamicMapper).GetDeclaredMethod(nameof(Map));
 
-        public bool IsMatch(TypePair context) => context.DestinationType.IsDynamic() && !context.SourceType.IsDynamic();
+        public bool IsMatch(TypePair context)
+        {
+            bool result = context.DestinationType.IsDynamic() && !context.SourceType.IsDynamic();
+            return result;
+        }
+
 
         public Expression MapExpression(IConfigurationProvider configurationProvider, ProfileMap profileMap,
             PropertyMap propertyMap, Expression sourceExpression, Expression destExpression,
-            Expression contextExpression) =>
-            Call(null,
+            Expression contextExpression)
+        {
+            MethodCallExpression result = Call(null,
                 MapMethodInfo.MakeGenericMethod(sourceExpression.Type, destExpression.Type),
                 sourceExpression,
                 ToType(
@@ -60,5 +66,12 @@ namespace AutoMapper.Mappers
                         DelegateFactory.GenerateConstructorExpression(destExpression.Type)), destExpression.Type),
                 contextExpression,
                 Constant(profileMap));
+
+            DebugHelpers.LogExpression(result, "ToDynamic MapExpression");
+
+            return result;
+        }
+
+
     }
 }

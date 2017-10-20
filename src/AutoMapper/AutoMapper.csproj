@@ -41,4 +41,31 @@
     <Reference Include="System.Runtime.Serialization" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Execution\PropertyMapFuncHelper.cs" />
+    <Compile Remove="Execution\TypeMapPlanBuilder_Original.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Execution\PropertyMapFuncHelper.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net45'">
+    <PackageReference Include="AgileObjects.ReadableExpressions">
+      <Version>1.9.2</Version>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net40'">
+    <PackageReference Include="AgileObjects.ReadableExpressions">
+      <Version>1.9.2</Version>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.3'">
+    <PackageReference Include="AgileObjects.ReadableExpressions">
+      <Version>1.9.2</Version>
+    </PackageReference>
+  </ItemGroup>
+
 </Project>

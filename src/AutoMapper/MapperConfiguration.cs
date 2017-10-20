@@ -113,7 +113,10 @@ namespace AutoMapper
                 return GenerateTypeMapExpression(mapRequest, typeMap);
             }
             var mapperToUse = FindMapper(mapRequest.RuntimeTypes);
-            return GenerateObjectMapperExpression(mapRequest, mapperToUse, this);
+            LambdaExpression result = GenerateObjectMapperExpression(mapRequest, mapperToUse, this);
+
+            DebugHelpers.LogExpression(result, "ExecutionPlan");
+            return result;
         }
 
         private static LambdaExpression GenerateTypeMapExpression(MapRequest mapRequest, TypeMap typeMap)
@@ -383,6 +386,9 @@ namespace AutoMapper
 
             private static Expression<UntypedMapperFunc> Wrap(MapRequest mapRequest, LambdaExpression typedExpression)
             {
+
+                DebugHelpers.LogExpression(typedExpression, "typed expression");
+
                 var sourceParameter = Parameter(typeof(object), "source");
                 var destinationParameter = Parameter(typeof(object), "destination");
                 var contextParameter = Parameter(typeof(ResolutionContext), "context");

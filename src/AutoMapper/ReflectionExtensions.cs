@@ -29,6 +29,12 @@ namespace AutoMapper
         public static object GetMemberValue(this MemberInfo propertyOrField, object target)
             => ReflectionHelper.GetMemberValue(propertyOrField, target);
 
+        public static void SetPropertyValue(this MemberInfo propertyOrField, object target, object value, object[] index)
+            => ReflectionHelper.SetPropertyValue(propertyOrField, target, value, index);
+
+        public static object GetPropertyValue(this MemberInfo propertyOrField, object target, object[] index)
+            => ReflectionHelper.GetPropertyValue(propertyOrField, target, index);
+
         public static IEnumerable<MemberInfo> GetMemberPath(Type type, string fullMemberName)
             => ReflectionHelper.GetMemberPath(type, fullMemberName);
 
@@ -52,6 +58,9 @@ namespace AutoMapper
         /// <returns></returns>
         public static Type ReplaceItemType(this Type targetType, Type oldType, Type newType)
             => ReflectionHelper.ReplaceItemType(targetType, oldType, newType);
+
+        public static bool IsFieldOrProperty(this MemberInfo mi) =>
+            ReflectionHelper.IsFieldOrProperty(mi);
 
 #if NET40
         public static TypeInfo GetTypeInfo(this Type type)
@@ -86,6 +95,7 @@ namespace AutoMapper
         public static bool GetIsConstructedGenericType(this Type type) =>
             type.IsConstructedGenericType;
 #endif
+
     }
 }
 

@@ -10,6 +10,8 @@ namespace AutoMapper.Execution
     using static Internal.ExpressionFactory;
     using static ExpressionBuilder;
     using System.Diagnostics;
+    using AutoMapper.ExtraMembers;
+
 
     public class TypeMapPlanBuilder
     {
@@ -352,16 +354,33 @@ namespace AutoMapper.Execution
                     null));
         }
 
-        private Expression CreatePropertyMapFunc(PropertyMap propertyMap, Expression destination)
+        private BlockExpression CreatePropertyMapFunc(PropertyMap propertyMap, Expression destination)
         {
-            var destMember = MakeMemberAccess(destination, propertyMap.DestinationProperty);
-
             Expression getter;
+            MemberExpression destMember = null;
+            MemberInfo destExtraMemberInfo = null;
+            Type sourceType = propertyMap.SourceType;
 
-            if (propertyMap.DestinationProperty is PropertyInfo pi && pi.GetGetMethod(true) == null)
-                getter = Default(propertyMap.DestinationPropertyType);
+            bool destIsExtra = IsExtraFieldOrProperty(propertyMap.DestinationProperty);
+            if (destIsExtra)
+            {
+                // Retreive the Property or Field Info from the ProfileMap for this extra member.
+                destExtraMemberInfo = propertyMap.ExtraDestinationMember;
+                getter = CreateGetterExpression(destExtraMemberInfo, destination, propertyMap.SourceType, propertyMap);
+            }
             else
-                getter = destMember;
+            {
+                destMember = MakeMemberAccess(destination, propertyMap.DestinationProperty);
+                DebugHelpers.LogExpression(destMember, "destMember");
+
+                if (propertyMap.DestinationProperty is PropertyInfo pi && pi.GetGetMethod(true) == null)
+                    getter = Default(propertyMap.DestinationPropertyType);
+                else
+                    getter = destMember;
+            }
+
+            //DebugHelpers.LogExpression(getter, "getter");
+
 
             Expression destValueExpr;
             if (propertyMap.UseDestinationValue)
@@ -377,16 +396,40 @@ namespace AutoMapper.Execution
                         Default(propertyMap.DestinationPropertyType), getter);
             }
 
-            var valueResolverExpr = BuildValueResolverFunc(propertyMap, getter);
-            var resolvedValue = Variable(valueResolverExpr.Type, "resolvedValue");
+            //DebugHelpers.LogExpression(destValueExpr, "destValueExpr");
+
+            Expression valueResolverExpr;
+            if (IsExtraFieldOrProperty(propertyMap.SourceMember))
+            {
+                // Retreive the Property or Field Info from the ProfileMap for this extra member.
+                MemberInfo srcExtraMemberInfo = propertyMap.ExtraSourceMember;
+                valueResolverExpr = CreateGetterExpression(srcExtraMemberInfo, Source, propertyMap.DestinationPropertyType, propertyMap);
+            }
+            else
+            {
+                valueResolverExpr = BuildValueResolverFunc(propertyMap, getter);
+            }
+
+            //DebugHelpers.LogExpression(valueResolverExpr, "valueResolverExpr1");
+
+            ParameterExpression resolvedValue;
+            resolvedValue = Variable(valueResolverExpr.Type, "resolvedValue");
+            //DebugHelpers.LogExpression(resolvedValue, "resolvedValue");
+
             var setResolvedValue = Assign(resolvedValue, valueResolverExpr);
+            //DebugHelpers.LogExpression(setResolvedValue, "setResolvedValue");
+
+            // Set it here, we will test later to see if it has been updated.
             valueResolverExpr = resolvedValue;
 
-            var typePair = new TypePair(valueResolverExpr.Type, propertyMap.DestinationPropertyType);
+            var typePair = new TypePair(resolvedValue.Type, propertyMap.DestinationPropertyType);
             valueResolverExpr = propertyMap.Inline
-                ? MapExpression(_configurationProvider, _typeMap.Profile, typePair, valueResolverExpr, Context,
+                ? MapExpression(_configurationProvider, _typeMap.Profile, typePair, resolvedValue, Context,
                     propertyMap, destValueExpr)
-                : ContextMap(typePair, valueResolverExpr, Context, destValueExpr);
+                : ContextMap(typePair, resolvedValue, Context, destValueExpr);
+
+            //DebugHelpers.LogExpression(valueResolverExpr, "valueResolverExpr2 after calling MapExpression.");
+
 
             valueResolverExpr = propertyMap.ValueTransformers
                 .Concat(_typeMap.ValueTransformers)
@@ -394,10 +437,14 @@ namespace AutoMapper.Execution
                 .Where(vt => vt.IsMatch(propertyMap))
                 .Aggregate(valueResolverExpr, (current, vtConfig) => ToType(ReplaceParameters(vtConfig.TransformerExpression, ToType(current, vtConfig.ValueType)), propertyMap.DestinationPropertyType));
 
+            //DebugHelpers.LogExpression(valueResolverExpr, "valueResolverExpr3 after calling Value Transform.");
+
+
             ParameterExpression propertyValue;
             Expression setPropertyValue;
             if (valueResolverExpr == resolvedValue)
             {
+                // The valueResolverExp object has not been updated, it still references the same object as does resolvedValue.
                 propertyValue = resolvedValue;
                 setPropertyValue = setResolvedValue;
             }
@@ -407,23 +454,52 @@ namespace AutoMapper.Execution
                 setPropertyValue = Assign(propertyValue, valueResolverExpr);
             }
 
-            Expression mapperExpr;
-            if (propertyMap.DestinationProperty is FieldInfo)
+            //DebugHelpers.LogExpression(setPropertyValue, "SetPropertyValue");
+
+
+            Expression mapperExpr = null;
+
+            if (destIsExtra)
             {
+                Debug.Assert(destExtraMemberInfo != null, "extraMemberInfo should not be null here, but it is.");
+
+                if (destExtraMemberInfo is PropertyInfo pi && pi.GetSetMethod(true) == null)
+                {
+                    //throw new ArgumentException("Extra Member must have a SetMethod defined.");
+                    mapperExpr = propertyValue;
+                }
+                else
+                {
+                    ParameterExpression rVal = (propertyMap.SourceType != propertyMap.DestinationPropertyType)
+                        ? (ParameterExpression)ToType(propertyValue, propertyMap.DestinationPropertyType)
+                        : propertyValue;
+
+                    mapperExpr = CreateSetterExpression(destExtraMemberInfo, destination, 
+                        propertyMap.DestinationPropertyType, propertyMap, rVal);
+                }
+            }
+            else if (propertyMap.DestinationProperty is FieldInfo)
+            {
+                Debug.Assert(destMember != null, "destMember should not be null here, but it is.");
+
                 mapperExpr = propertyMap.SourceType != propertyMap.DestinationPropertyType
                     ? Assign(destMember, ToType(propertyValue, propertyMap.DestinationPropertyType))
-                    : Assign(getter, propertyValue);
+                    : Assign(destMember, propertyValue);
             }
             else
             {
-                var setter = ((PropertyInfo) propertyMap.DestinationProperty).GetSetMethod(true);
-                if (setter == null)
+                Debug.Assert(destMember != null, "destMember should not be null here, but it is.");
+
+                if (propertyMap.DestinationProperty is PropertyInfo pi && pi.GetSetMethod(true) == null)
                     mapperExpr = propertyValue;
                 else
                     mapperExpr = Assign(destMember, ToType(propertyValue, propertyMap.DestinationPropertyType));
             }
 
+                DebugHelpers.LogExpression(mapperExpr, "mapperExpr");
+
             if (propertyMap.Condition != null)
+            {
                 mapperExpr = IfThen(
                     propertyMap.Condition.ConvertReplaceParameters(
                         Source,
@@ -434,8 +510,13 @@ namespace AutoMapper.Execution
                     ),
                     mapperExpr
                 );
+            }
 
-            mapperExpr = Block(new[] {setResolvedValue, setPropertyValue, mapperExpr}.Distinct());
+            DebugHelpers.LogExpression(mapperExpr, "mapperExpr2");
+
+            mapperExpr = Block(new[] { setResolvedValue, setPropertyValue, mapperExpr }.Distinct());
+
+            DebugHelpers.LogExpression(mapperExpr, "mapperExpr3");
 
             if (propertyMap.PreCondition != null)
                 mapperExpr = IfThen(
@@ -443,10 +524,110 @@ namespace AutoMapper.Execution
                     mapperExpr
                 );
 
-            return Block(new[] {resolvedValue, propertyValue}.Distinct(), mapperExpr);
+            DebugHelpers.LogExpression(mapperExpr, "mapperExpr4");
+
+            BlockExpression be = Block(new[] { resolvedValue, propertyValue }.Distinct(), mapperExpr);
+
+            DebugHelpers.LogExpression(be, "blockExpression from CreatePropertyMapFunc.");
+
+            return be;
         }
 
-        private Expression BuildValueResolverFunc(PropertyMap propertyMap, Expression destValueExpr)
+        private Expression CreateGetterExpression(MemberInfo mi, Expression destination, Type sourceType, PropertyMap pm)
+        {
+            ExtraMemberAttribute ea = (ExtraMemberAttribute) mi.GetCustomAttribute(typeof(ExtraMemberAttribute));
+            string strategyKey = ea.StrategyKey;
+
+            ExtraMemberCallDetails callDetails;
+
+            if (strategyKey != null)
+            {
+                Func<MemberInfo, Expression, Type, IPropertyMap, ExtraMemberCallDetails> strategyGetter
+                    = pm.TypeMap.Profile.GetExtraGetterStrategyFunc(strategyKey);
+
+                callDetails = strategyGetter(mi, destination, sourceType, pm);
+            }
+            else
+            {
+                callDetails = ExtraMemberCallDetails.GetDefaultGetterDetails(mi, destination);
+            }
+
+            MethodInfo callTarget = callDetails.GetMethod();
+            Expression callExpr = Expression.Call(callTarget, callDetails.Parameters);
+
+            Expression cast = ToType(callExpr, mi.GetMemberType());
+            return cast;
+        }
+
+        private Expression CreateSetterExpression(MemberInfo mi, Expression destination, Type sourceType, PropertyMap pm, ParameterExpression value)
+        {
+            ExtraMemberAttribute ea = (ExtraMemberAttribute)mi.GetCustomAttribute(typeof(ExtraMemberAttribute));
+            string strategyKey = ea.StrategyKey;
+
+            ExtraMemberCallDetails callDetails;
+
+            if (strategyKey != null)
+            {
+                Func<MemberInfo, Expression, Type, IPropertyMap, ParameterExpression, ExtraMemberCallDetails> strategySetter
+                    = pm.TypeMap.Profile.GetExtraSetterStrategyFunc(strategyKey);
+
+                callDetails = strategySetter(mi, destination, sourceType, pm, value);
+            }
+            else
+            {
+                callDetails = ExtraMemberCallDetails.GetDefaultSetterDetails(mi, destination, value);
+            }
+
+            MethodInfo callTarget = callDetails.GetMethod();
+            Expression callExpr = Expression.Call(callTarget, callDetails.Parameters);
+            return callExpr;
+        }
+
+        private MethodCallExpression CreateSetterExpression_Old(MemberInfo mi, Expression destination, Type sourceType, ParameterExpression value)
+        {
+            Expression sourceTypeExp = Expression.Constant(sourceType);
+            Expression[] parameters;
+            if (mi is PropertyInfo pi && pi.PropertyType.IsValueType())
+            {
+                var cast = Expression.TypeAs(value, typeof(object));
+                parameters = new Expression[4] { Expression.Constant(mi), destination, sourceTypeExp, cast };
+            }
+            else
+            {
+                parameters = new Expression[4] { Expression.Constant(mi), destination, sourceTypeExp, value };
+            }
+
+            MethodInfo theSetMethod = AutoMapper.Internal.ReflectionHelper.SetPropertyValueMethod;
+            MethodCallExpression callExpr = Expression.Call(theSetMethod, parameters);
+            return callExpr;
+        }
+
+        private UnaryExpression CreateGetterExpression_Old(MemberInfo mi, Expression destination, Type sourceType, PropertyMap pm)
+        {
+            Expression sourceTypeExp = Expression.Constant(sourceType);
+            Expression[] parameters = new Expression[3] { Expression.Constant(mi), destination, sourceTypeExp };
+            MethodInfo theGetMethod = AutoMapper.Internal.ReflectionHelper.GetPropertyValueMethod;
+
+            MethodCallExpression callExpr = Expression.Call(theGetMethod, parameters);
+
+            UnaryExpression cast = (UnaryExpression)ToType(callExpr, mi.GetMemberType());
+            return cast;
+        }
+
+        private bool IsExtraFieldOrProperty(MemberInfo mi)
+        {
+            if (mi is PropertyInfo pi)
+            {
+                return pi.GetCustomAttribute<ExtraMemberAttribute>(true) != null;
+            }
+            else if (mi is FieldInfo fi)
+            {
+                return fi.GetCustomAttribute<ExtraMemberAttribute>(true) != null;
+            }
+            return false;
+        }
+
+        internal Expression BuildValueResolverFunc(PropertyMap propertyMap, Expression destValueExpr)
         {
             Expression valueResolverFunc;
             var destinationPropertyType = propertyMap.DestinationPropertyType;
@@ -552,5 +733,7 @@ namespace AutoMapper.Execution
             return Call(ToType(resolverInstance, iResolverType), iResolverType.GetDeclaredMethod("Resolve"),
                 parameters);
         }
+
+
     }
 }

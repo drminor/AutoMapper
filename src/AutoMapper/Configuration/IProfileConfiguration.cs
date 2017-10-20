@@ -3,9 +3,15 @@ using System.Collections.Generic;
 using System.Reflection;
 using AutoMapper.Configuration.Conventions;
 using AutoMapper.Mappers;
+using System.Linq.Expressions;
+
+using AutoMapper.ExtraMembers;
 
 namespace AutoMapper.Configuration
 {
+    using ExtraGetterStrategyFunc = Func<MemberInfo, Expression, Type, IPropertyMap, ExtraMemberCallDetails>;
+    using ExtraSetterStrategyFunc = Func<MemberInfo, Expression, Type, IPropertyMap, ParameterExpression, ExtraMemberCallDetails>;
+
     /// <summary>
     /// Contains profile-specific configuration
     /// </summary>
@@ -26,6 +32,7 @@ namespace AutoMapper.Configuration
         /// </summary>
         IEnumerable<MethodInfo> SourceExtensionMethods { get; }
 
+
         /// <summary>
         /// Specify which properties should be mapped.
         /// By default only public properties are mapped.e
@@ -45,5 +52,10 @@ namespace AutoMapper.Configuration
         IEnumerable<ITypeMapConfiguration> TypeMapConfigs { get; }
         IEnumerable<ITypeMapConfiguration> OpenTypeMapConfigs { get; }
         IEnumerable<ValueTransformerConfiguration> ValueTransformers { get; }
+
+        IDictionary<Type, IEnumerable<MemberInfo>> ExtraMembersByType { get; }
+        IDictionary<string, ExtraGetterStrategyFunc> ExtraMemberGetterStrategies { get; }
+        IDictionary<string, ExtraSetterStrategyFunc> ExtraMemberSetterStrategies { get; }
+
     }
 }

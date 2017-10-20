@@ -140,6 +140,9 @@ namespace AutoMapper.Configuration
         private Action<IMemberConfigurationExpression<TSource, TDestination, object>> _allMemberOptions;
         private Func<MemberInfo, bool> _memberFilter;
 
+        private List<MemberInfo> _extraSourceMembers = new List<MemberInfo>();
+        private List<MemberInfo> _extraDestMembers = new List<MemberInfo>();
+
         public MappingExpression(MemberList memberList)
             : this(memberList, typeof(TSource), typeof(TDestination))
         {
@@ -160,6 +163,10 @@ namespace AutoMapper.Configuration
         public ITypeMapConfiguration ReverseTypeMap => _reverseMap;
         public IList<ValueTransformerConfiguration> ValueTransformers => _valueTransformers;
         protected List<Action<TypeMap>> TypeMapActions { get; } = new List<Action<TypeMap>>();
+
+        public IList<MemberInfo> ExtraSourceMembers => _extraSourceMembers;
+
+        public IList<MemberInfo> ExtraDestMembers => _extraDestMembers;
 
         public IMappingExpression<TSource, TDestination> PreserveReferences()
         {
@@ -196,6 +203,7 @@ namespace AutoMapper.Configuration
         public IMappingExpression<TSource, TDestination> ForMember<TMember>(Expression<Func<TDestination, TMember>> destinationMember,
                                                                    Action<IMemberConfigurationExpression<TSource, TDestination, TMember>> memberOptions)
         {
+            // TODO: Attempt to use the destinationMember to get the memberInfo from the ExtraDestinationMembers.
             var memberInfo = ReflectionHelper.FindProperty(destinationMember);
             return ForDestinationMember(memberInfo, memberOptions);
         }
@@ -203,8 +211,20 @@ namespace AutoMapper.Configuration
         public IMappingExpression<TSource, TDestination> ForMember(string name,
                                                                    Action<IMemberConfigurationExpression<TSource, TDestination, object>> memberOptions)
         {
-            var member = DestinationType.GetFieldOrProperty(name);
+            var member = GetExtraDestinationMember(name);
+            if(member == null)
+                member = DestinationType.GetFieldOrProperty(name);
             return ForDestinationMember(member, memberOptions);
+        }
+
+        private MemberInfo GetExtraSourceMember(string name)
+        {
+            return _extraSourceMembers.FirstOrDefault((mi) => mi.Name == name);
+        }
+
+        private MemberInfo GetExtraDestinationMember(string name)
+        {
+            return _extraDestMembers.FirstOrDefault((mi) => mi.Name == name);
         }
 
         public void ForAllOtherMembers(Action<IMemberConfigurationExpression<TSource, TDestination, object>> memberOptions)
@@ -538,6 +558,29 @@ namespace AutoMapper.Configuration
             var config = new ValueTransformerConfiguration(typeof(TValue), transformer);
 
             _valueTransformers.Add(config);
+
+            return this;
+        }
+
+        public IMappingExpression<TSource, TDestination> AddExtraSourceMembers(IEnumerable<MemberInfo> members)
+        {
+            _extraSourceMembers.AddRange(members);
+            return this;
+        }
+
+        public IMappingExpression<TSource, TDestination> AddExtraDestintionMembers(IEnumerable<MemberInfo> members)
+        {
+            _extraDestMembers.AddRange(members);
+            return this;
+        }
+
+        public IMappingExpression<TSource, TDestination> RegisterExtraMembers(IProfileExpression cfg)
+        {
+            IEnumerable<MemberInfo> members = cfg.GetExtraMembers(typeof(TSource));
+            if(members != null) _extraSourceMembers.AddRange(members);
+
+            members = cfg.GetExtraMembers(typeof(TDestination));
+            if(members != null) _extraDestMembers.AddRange(members);
 
             return this;
         }

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 
 namespace AutoMapper.Configuration
 {
@@ -11,5 +13,7 @@ namespace AutoMapper.Configuration
         bool IsOpenGeneric { get; }
         TypePair Types { get; }
         ITypeMapConfiguration ReverseTypeMap { get; }
+        IList<MemberInfo> ExtraSourceMembers { get; }
+        IList<MemberInfo> ExtraDestMembers { get; }
     }
 }

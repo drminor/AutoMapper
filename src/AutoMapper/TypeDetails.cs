@@ -8,6 +8,7 @@ using AutoMapper.Configuration;
 
 namespace AutoMapper
 {
+
     /// <summary>
     /// Contains cached reflection information for easy retrieval
     /// </summary>
@@ -17,15 +18,30 @@ namespace AutoMapper
         public TypeDetails(Type type, ProfileMap config)
         {
             Type = type;
+            IEnumerable<MemberInfo> extraMembersProvidedByConfig = config.ExtraMembers(type) ?? new List<MemberInfo>();
             var membersToMap = MembersToMap(config.ShouldMapProperty, config.ShouldMapField);
+
             var publicReadableMembers = GetAllPublicReadableMembers(membersToMap);
-            var publicWritableMembers = GetAllPublicWritableMembers(membersToMap);
+            //if(extraMembersProvidedByConfig != null) 
+                publicReadableMembers = publicReadableMembers.Concat(GetAllExtraPublicReadableMembers(extraMembersProvidedByConfig, membersToMap));
+
             PublicReadAccessors = BuildPublicReadAccessors(publicReadableMembers);
+
+            var publicWritableMembers = GetAllPublicWritableMembers(membersToMap);
+            //if(extraMembersProvidedByConfig != null)
+                publicWritableMembers = publicWritableMembers.Concat(GetAllExtraPublicWritableMembers(extraMembersProvidedByConfig, membersToMap));
+
             PublicWriteAccessors = BuildPublicAccessors(publicWritableMembers);
+
             PublicNoArgMethods = BuildPublicNoArgMethods();
+            //if(extraMembersProvidedByConfig != null)
+                PublicNoArgMethods = PublicNoArgMethods.Concat(BuildPublicNoArgMethods(extraMembersProvidedByConfig));
+
             Constructors = type.GetDeclaredConstructors().Where(ci => !ci.IsStatic).ToArray();
             PublicNoArgExtensionMethods = BuildPublicNoArgExtensionMethods(config.SourceExtensionMethods);
+
             AllMembers = PublicReadAccessors.Concat(PublicNoArgMethods).Concat(PublicNoArgExtensionMethods).ToList();
+
             DestinationMemberNames = AllMembers.Select(mi => new DestinationMemberName { Member = mi, Possibles = PossibleNames(mi.Name, config.Prefixes, config.Postfixes).ToArray() });
         }
 
@@ -150,11 +166,21 @@ namespace AutoMapper
             return filteredMembers.ToArray();
         }
 
-        private IEnumerable<MemberInfo> GetAllPublicReadableMembers(Func<MemberInfo, bool> membersToMap) 
+        private IEnumerable<MemberInfo> GetAllPublicReadableMembers(Func<MemberInfo, bool> membersToMap)
             => GetAllPublicMembers(PropertyReadable, FieldReadable, membersToMap);
 
         private IEnumerable<MemberInfo> GetAllPublicWritableMembers(Func<MemberInfo, bool> membersToMap)
             => GetAllPublicMembers(PropertyWritable, FieldWritable, membersToMap);
+
+        private IEnumerable<MemberInfo> GetAllExtraPublicReadableMembers(IEnumerable<MemberInfo> members, Func<MemberInfo, bool> membersToMap)
+        { 
+           return members == null ? new List<MemberInfo>() : GetAllPublicMembers(members, PropertyReadable, FieldReadable, membersToMap);
+        }
+
+        private IEnumerable<MemberInfo> GetAllExtraPublicWritableMembers(IEnumerable<MemberInfo> members, Func<MemberInfo, bool> membersToMap)
+        {
+             return members == null ? new List<MemberInfo>() : GetAllPublicMembers(members, PropertyWritable, FieldWritable, membersToMap);
+        }
 
         private static bool PropertyReadable(PropertyInfo propertyInfo) => propertyInfo.CanRead;
 
@@ -183,17 +209,45 @@ namespace AutoMapper
                 typesToScan.AddRange(Type.GetTypeInfo().ImplementedInterfaces);
 
             // Scan all types for public properties and fields
-            return typesToScan
+            IEnumerable<MemberInfo> members = typesToScan
                 .Where(x => x != null) // filter out null types (e.g. type.BaseType == null)
                 .SelectMany(x => x.GetDeclaredMembers()
                     .Where(mi => mi.DeclaringType != null && mi.DeclaringType == x)
-                    .Where(
-                        m =>
-                            m is FieldInfo && fieldAvailableFor((FieldInfo)m) ||
-                            m is PropertyInfo && propertyAvailableFor((PropertyInfo)m) &&
-                            !((PropertyInfo)m).GetIndexParameters().Any())
-                    .Where(memberAvailableFor)
-                );
+                 );
+
+            return GetAllPublicMembers(members, propertyAvailableFor, fieldAvailableFor, memberAvailableFor);
+        }
+
+        private IEnumerable<MemberInfo> GetAllPublicMembers(
+            IEnumerable<MemberInfo> members,
+            Func<PropertyInfo, bool> propertyAvailableFor,
+            Func<FieldInfo, bool> fieldAvailableFor,
+            Func<MemberInfo, bool> memberAvailableFor)
+        {
+            return members.Where(
+                m =>
+                    m is FieldInfo && fieldAvailableFor((FieldInfo)m) ||
+                    m is PropertyInfo && propertyAvailableFor((PropertyInfo)m) &&
+                    !((PropertyInfo)m).GetIndexParameters().Any())
+                .Where(memberAvailableFor);
+
+
+            //IEnumerable<MemberInfo> temp = members.Where(
+            //    m =>
+            //        m is FieldInfo && fieldAvailableFor((FieldInfo)m) ||
+            //        m is PropertyInfo && propertyAvailableFor((PropertyInfo)m) &&
+            //        !((PropertyInfo)m).GetIndexParameters().Any());
+
+            //List<MemberInfo> result = new List<MemberInfo>();
+            //foreach (MemberInfo mi in temp)
+            //{
+            //    if(memberAvailableFor(mi))
+            //    {
+            //        result.Add(mi);
+            //    }
+            //}
+            //return result;
+
         }
 
         private MethodInfo[] BuildPublicNoArgMethods()
@@ -203,5 +257,15 @@ namespace AutoMapper
                 .Where(m => (m.ReturnType != typeof(void)) && (m.GetParameters().Length == 0))
                 .ToArray();
         }
+
+        private MethodInfo[] BuildPublicNoArgMethods(IEnumerable<MemberInfo> members)
+        {
+            return members.Select(me => { if (me is MethodInfo mi) return mi; else return null; })
+                .Where(mi => mi != null)
+                .Where(mi => mi.IsPublic && !(mi.IsStatic) && mi.DeclaringType != typeof(object))
+                .Where(m => (m.ReturnType != typeof(void)) && (m.GetParameters().Length == 0))
+                .ToArray();
+        }
+
     }
 }

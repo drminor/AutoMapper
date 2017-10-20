@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace AutoMapper
 {
@@ -453,5 +454,14 @@ namespace AutoMapper
         /// <param name="transformer">Transformation expression</param>
         /// <returns>Itself</returns>
         IMappingExpression<TSource, TDestination> AddTransform<TValue>(Expression<Func<TValue, TValue>> transformer);
+
+        // TODO: Add Docs
+        IMappingExpression<TSource, TDestination> AddExtraSourceMembers(IEnumerable<MemberInfo> members);
+
+        // TODO: Add Docs
+        IMappingExpression<TSource, TDestination> AddExtraDestintionMembers(IEnumerable<MemberInfo> members);
+
+        // TODO: Add Docs
+        IMappingExpression<TSource, TDestination> RegisterExtraMembers(IProfileExpression cfg);
     }
 }

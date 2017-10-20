@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="PropBagDynamic.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\AutoMapper\ReflectionExtensions.cs" Link="ReflectionExtensions.cs" />
     <Compile Include="..\AutoMapper\TypeExtensions.cs" Link="TypeExtensions.cs" />
   </ItemGroup>
@@ -47,6 +51,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="PropBagDynamic.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\TypeSafePropertyBag\TypeSafePropertyBag.csproj" />
+    <ProjectReference Include="..\..\WrapperClassGeneratorLib\WrapperClassGeneratorLib.csproj" />
     <ProjectReference Include="..\AutoMapper\AutoMapper.csproj" />
   </ItemGroup>
 

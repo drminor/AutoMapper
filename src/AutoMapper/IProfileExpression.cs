@@ -4,9 +4,14 @@ using System.Linq.Expressions;
 using System.Reflection;
 using AutoMapper.Configuration.Conventions;
 using AutoMapper.Mappers;
+using AutoMapper.ExtraMembers;
 
 namespace AutoMapper
 {
+
+    using ExtraGetterStrategyFunc = Func<MemberInfo, Expression, Type, IPropertyMap, ExtraMemberCallDetails>;
+    using ExtraSetterStrategyFunc = Func<MemberInfo, Expression, Type, IPropertyMap, ParameterExpression, ExtraMemberCallDetails>;
+
     /// <summary>
     /// Configuration for profile-specific maps
     /// </summary>
@@ -145,6 +150,16 @@ namespace AutoMapper
 
         Func<PropertyInfo, bool> ShouldMapProperty { get; set; }
         Func<FieldInfo, bool> ShouldMapField { get; set; }
+
+        // Consider allowing one to configure whether or not the Property and Field filters
+        // are applied to the list of Extra Members.
+        // The default value wouuld be false.
+        // In most cases the caller would have to do nothing, since in most cases
+        // one does not want to filter something that is already provided in a custom manner.
+        
+        //bool ApplyShouldMapPropertyToExtraMembers { get; set; }
+        //bool ApplyShouldMapFieldToExtraMembers { get; set; }
+
         string ProfileName { get; }
         IMemberConfiguration AddMemberConfiguration();
         IConditionalObjectMapper AddConditionalObjectMapper();
@@ -156,8 +171,45 @@ namespace AutoMapper
         void IncludeSourceExtensionMethods(Type type);
 
         /// <summary>
+        /// Include fields, properties and (no arg) methods for a type used as either a source or a destination in some mapping function.
+        /// </summary>
+        /// <param name="mappedType">The type to which the extra members will included.</param>
+        /// <param name="extraMembers">List of MemberInfo records, each defining a field, property or (no arg) method.</param>
+        void IncludeExtraMembersForType(Type mappedType, IEnumerable<MemberInfo> extraMembers);
+
+        /// <summary>
+        /// Gets the list of extra members added to the specified type.
+        /// </summary>
+        /// <param name="type">The type to which the extra members were included.</param>
+        /// <returns></returns>
+        IEnumerable<MemberInfo> GetExtraMembers(Type type);
+
+        /// <summary>
+        /// Clears the list of extra members for all types.
+        /// </summary>
+        void ClearExtraMembersForAllTypes();
+
+        /// <summary>
+        /// Removes the current list of extra members, if any, for the specified type.
+        /// </summary>
+        /// <param name="type">The type for which the list of extra members should be removed.</param>
+        void ClearExtraMembersForType(Type type);
+
+
+        //private MethodCallExpression CreateSetterExpression(MemberInfo mi, Expression destination, PropertyMap pm, ParameterExpression value)
+
+        void DefineExtraMemberSetterBuilder(string name, ExtraSetterStrategyFunc setterExpressionBuilder);
+        void DefineExtraMemberGetterBuilder(string name, ExtraGetterStrategyFunc getterExpressionBuilder);
+
+        ExtraGetterStrategyFunc GetExtraGetterStrategy(string getterStrategyName);
+        ExtraSetterStrategyFunc GetExtraSetterSrategry(string setterStrategyName);
+
+
+        /// <summary>
         /// Value transformers. Modify the list directly or use <see cref="ValueTransformerConfigurationExtensions.Add{TValue}"/>
         /// </summary>
         IList<ValueTransformerConfiguration> ValueTransformers { get; }
     }
+
+
 }

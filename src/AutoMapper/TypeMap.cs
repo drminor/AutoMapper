@@ -286,6 +286,7 @@ namespace AutoMapper
                     .OrderBy(map => map.MappingOrder).ToArray();
 
             MapExpression = new TypeMapPlanBuilder(configurationProvider, this).CreateMapperLambda(typeMapsPath);
+            DebugHelpers.LogExpression(MapExpression, "MapExpression");
         }
 
         public PropertyMap GetExistingPropertyMapFor(MemberInfo destinationProperty)
@@ -392,6 +393,22 @@ namespace AutoMapper
                 inheritedTypeMap.PathMaps.Where(
                     baseConfig => PathMaps.All(derivedConfig => derivedConfig.MemberPath != baseConfig.MemberPath));
             _pathMaps.AddRange(notOverridenPathMaps);
+        }
+
+        public IEnumerable<MemberInfo> ExtraSourceMembers
+        {
+            get
+            {
+                return Profile.ExtraMembers(SourceType);
+            }
+        }
+
+        public IEnumerable<MemberInfo> ExtraDestinationMembers
+        {
+            get
+            {
+                return Profile.ExtraMembers(DestinationType);
+            }
         }
     }
 }

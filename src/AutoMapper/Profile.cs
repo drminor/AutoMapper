@@ -7,9 +7,13 @@ using System.Runtime.CompilerServices;
 using AutoMapper.Configuration;
 using AutoMapper.Configuration.Conventions;
 using AutoMapper.Mappers;
+using AutoMapper.ExtraMembers;
 
 namespace AutoMapper
 {
+    using ExtraGetterStrategyFunc = Func<MemberInfo, Expression, Type, IPropertyMap, ExtraMemberCallDetails>;
+    using ExtraSetterStrategyFunc = Func<MemberInfo, Expression, Type, IPropertyMap, ParameterExpression, ExtraMemberCallDetails>;
+
     /// <summary>
     ///     Provides a named configuration for maps. Naming conventions become scoped per profile.
     /// </summary>
@@ -28,6 +32,11 @@ namespace AutoMapper
         private readonly IList<ConditionalObjectMapper> _typeConfigurations = new List<ConditionalObjectMapper>();
         private readonly List<ITypeMapConfiguration> _typeMapConfigs = new List<ITypeMapConfiguration>();
         private readonly List<ValueTransformerConfiguration> _valueTransformerConfigs = new List<ValueTransformerConfiguration>();
+
+        private readonly Dictionary<Type, IEnumerable<MemberInfo>> _extraMembersByType = new Dictionary<Type, IEnumerable<MemberInfo>>();
+
+        private readonly IDictionary<string, ExtraGetterStrategyFunc> _extraMemberGetterStrategies = new Dictionary<string, ExtraGetterStrategyFunc>();
+        private readonly IDictionary<string, ExtraSetterStrategyFunc> _extraMemberSetterStrategies = new Dictionary<string, ExtraSetterStrategyFunc>();
 
         protected Profile(string profileName)
             : this() => ProfileName = profileName;
@@ -65,6 +74,12 @@ namespace AutoMapper
         IEnumerable<ITypeMapConfiguration> IProfileConfiguration.TypeMapConfigs => _typeMapConfigs;
         IEnumerable<ITypeMapConfiguration> IProfileConfiguration.OpenTypeMapConfigs => _openTypeMapConfigs;
         IEnumerable<ValueTransformerConfiguration> IProfileConfiguration.ValueTransformers => _valueTransformerConfigs;
+
+        IDictionary<Type, IEnumerable<MemberInfo>> IProfileConfiguration.ExtraMembersByType => _extraMembersByType;
+
+        public IDictionary<string, ExtraSetterStrategyFunc> ExtraMemberSetterStrategies => _extraMemberSetterStrategies;
+        public IDictionary<string, ExtraGetterStrategyFunc> ExtraMemberGetterStrategies => _extraMemberGetterStrategies;
+
 
         public virtual string ProfileName { get; }
 
@@ -187,6 +202,52 @@ namespace AutoMapper
 
         public void ApplyTransform<TValue>(Expression<Func<TValue, TValue>> transformer)
         {
+        }
+
+        public void IncludeExtraMembersForType(Type mappedType, IEnumerable<MemberInfo> members)
+        {
+            _extraMembersByType.Add(mappedType, members);
+        }
+
+        public IEnumerable<MemberInfo> GetExtraMembers(Type type)
+        {
+            if(_extraMembersByType.TryGetValue(type, out IEnumerable<MemberInfo> result))
+            {
+                return result;
+            }
+            return null;
+        }
+
+        public void ClearExtraMembersForAllTypes()
+        {
+            _extraMembersByType.Clear();
+        }
+
+        public void ClearExtraMembersForType(Type type)
+        {
+            _extraMembersByType.Remove(type);
+        }
+
+        public void DefineExtraMemberGetterBuilder(string name, ExtraGetterStrategyFunc getterExpressionBuilder)
+        {
+            _extraMemberGetterStrategies.Add(name, getterExpressionBuilder);
+        }
+
+        public void DefineExtraMemberSetterBuilder(string name, ExtraSetterStrategyFunc setterExpressionBuilder)
+        {
+            _extraMemberSetterStrategies.Add(name, setterExpressionBuilder);
+        }
+
+        public ExtraGetterStrategyFunc GetExtraGetterStrategy(string getterStrategyName)
+        {
+            // TODO: raise custom exception if key doesn't exist.
+            return _extraMemberGetterStrategies[getterStrategyName];
+        }
+
+        public ExtraSetterStrategyFunc GetExtraSetterSrategry(string setterStrategyName)
+        {
+            // TODO: raise custom exception if key doesn't exist.
+            return _extraMemberSetterStrategies[setterStrategyName];
         }
 
         private IMappingExpression<TSource, TDestination> CreateMappingExpression<TSource, TDestination>(

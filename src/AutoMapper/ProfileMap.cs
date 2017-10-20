@@ -1,14 +1,20 @@
+using AutoMapper.Configuration;
+using AutoMapper.Configuration.Conventions;
+using AutoMapper.ExtraMembers;
+using AutoMapper.Mappers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
-using AutoMapper.Configuration;
-using AutoMapper.Configuration.Conventions;
-using AutoMapper.Mappers;
 
 namespace AutoMapper
 {
+    using ExtraGetterStrategyFunc = Func<MemberInfo, Expression, Type, IPropertyMap, ExtraMemberCallDetails>;
+    using ExtraSetterStrategyFunc = Func<MemberInfo, Expression, Type, IPropertyMap, ParameterExpression, ExtraMemberCallDetails>;
+
+
 #if NETSTANDARD1_1
     struct IConvertible{}
 #endif
@@ -22,6 +28,12 @@ namespace AutoMapper
         private readonly IEnumerable<ITypeMapConfiguration> _openTypeMapConfigs;
         private readonly LockingConcurrentDictionary<Type, TypeDetails> _typeDetails;
 
+        private readonly IDictionary<Type, IEnumerable<MemberInfo>> _extraMembersByType;
+
+        private readonly IDictionary<string, ExtraGetterStrategyFunc> _extraMemberGetterStrategies;
+        private readonly IDictionary<string, ExtraSetterStrategyFunc> _extraMemberSetterStrategies;
+
+
         public ProfileMap(IProfileConfiguration profile)
             : this(profile, null)
         {
@@ -30,6 +42,11 @@ namespace AutoMapper
         public ProfileMap(IProfileConfiguration profile, IConfiguration configuration)
         {
             _typeDetails = new LockingConcurrentDictionary<Type, TypeDetails>(TypeDetailsFactory);
+
+            _extraMembersByType = profile.ExtraMembersByType;
+            _extraMemberGetterStrategies = profile.ExtraMemberGetterStrategies;
+            _extraMemberSetterStrategies = profile.ExtraMemberSetterStrategies;
+
 
             Name = profile.ProfileName;
             AllowNullCollections = profile.AllowNullCollections ?? configuration?.AllowNullCollections ?? false;
@@ -98,6 +115,27 @@ namespace AutoMapper
         public IEnumerable<string> Postfixes { get; }
         public IEnumerable<ValueTransformerConfiguration> ValueTransformers { get; }
 
+        public IEnumerable<MemberInfo> ExtraMembers(Type type)
+        {
+            if (_extraMembersByType.ContainsKey(type))
+            {
+                return _extraMembersByType[type];
+            }
+            return null;
+        }
+
+        public ExtraGetterStrategyFunc GetExtraGetterStrategyFunc(string getterStrategyName)
+        {
+            //TODO: Throw custom exception.
+            return _extraMemberGetterStrategies[getterStrategyName];
+        }
+
+        public ExtraSetterStrategyFunc GetExtraSetterStrategyFunc(string getterStrategyName)
+        {
+            //TODO: Throw custom exception.
+            return _extraMemberSetterStrategies[getterStrategyName];
+        }
+
         public TypeDetails CreateTypeDetails(Type type) => _typeDetails.GetOrAdd(type);
 
         private TypeDetails TypeDetailsFactory(Type type) => new TypeDetails(type, this);
@@ -106,6 +144,9 @@ namespace AutoMapper
         {
             foreach (var config in _typeMapConfigs.Where(c => !c.IsOpenGeneric))
             {
+                if(config.ExtraDestMembers?.Count > 0 && !this._extraMembersByType.ContainsKey(config.DestinationType)) this._extraMembersByType.Add(config.DestinationType, config.ExtraDestMembers);
+                if (config.ExtraSourceMembers?.Count > 0 && !this._extraMembersByType.ContainsKey(config.SourceType)) this._extraMembersByType.Add(config.SourceType, config.ExtraSourceMembers);
+
                 BuildTypeMap(typeMapRegistry, config);
 
                 if (config.ReverseTypeMap != null)

@@ -28,3 +28,4 @@ project.lock.json
 # JetBrains Rider
 .idea/
 *.sln.iml
+/src/AutoMapper/Execution/TypeMapPlanBuilder_Original.cs
